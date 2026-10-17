@@ -1,0 +1,202 @@
+@page "/orders"
+@inject CoffeeApiClient Api
+@inject TenantSession Session
+@inject IMessageService Message
+
+<PageTitle>Заказы</PageTitle>
+
+<h1 class="page-title">Заказы</h1>
+
+<Card Title="Список заказов" Class="section-gap">
+    <Extra>
+        <Button Icon="reload" OnClick="Load">Обновить</Button>
+    </Extra>
+    <Body>
+        <div class="section-gap">
+            <RadioGroup TValue="string" @bind-Value="statusFilter" @bind-Value:after="ReloadFromFirstPage" ButtonStyle="RadioButtonStyle.Solid">
+                <Radio RadioButton Value="@("")">Все</Radio>
+                <Radio RadioButton Value="@nameof(OrderStatus.InProgress)">В работе</Radio>
+                <Radio RadioButton Value="@nameof(OrderStatus.Completed)">Выполненные</Radio>
+                <Radio RadioButton Value="@nameof(OrderStatus.Cancelled)">Отменённые</Radio>
+            </RadioGroup>
+        </div>
+
+        <Table TItem="OrderSummary"
+               DataSource="@orders"
+               Total="@total"
+               PageIndex="@pageIndex"
+               PageSize="@pageSize"
+               Loading="@loading"
+               OnChange="OnTableChange"
+               ScrollX="700">
+            <PropertyColumn Property="o => o.Number" Title="№" />
+            <Column TData="string" Title="Статус">
+                <Tag Color="@StatusColor(context.Status)">@StatusText(context.Status)</Tag>
+            </Column>
+            <PropertyColumn Property="o => o.ItemCount" Title="Напитков" />
+            <Column TData="string" Title="Сумма">@Money.Format(context.TotalPriceCents)</Column>
+            <Column TData="string" Title="Создан">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</Column>
+            <ActionColumn Title="">
+                <Space>
+                    <SpaceItem><Button Size="@ButtonSize.Small" OnClick="() => ShowDetails(context)">Подробнее</Button></SpaceItem>
+                    @if (context.Status == OrderStatus.InProgress)
+                    {
+                        <SpaceItem>
+                            <Popconfirm Title="Отметить заказ выполненным?" OkText="Да" CancelText="Нет" OnConfirm="() => Complete(context)">
+                                <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small">Выполнить</Button>
+                            </Popconfirm>
+                        </SpaceItem>
+                        <SpaceItem>
+                            <Popconfirm Title="Отменить заказ? Ингредиенты вернутся на склад." OkText="Да" CancelText="Нет" OnConfirm="() => Cancel(context)">
+                                <Button Danger Size="@ButtonSize.Small">Отменить</Button>
+                            </Popconfirm>
+                        </SpaceItem>
+                    }
+                </Space>
+            </ActionColumn>
+        </Table>
+    </Body>
+</Card>
+
+<Modal Title="@($"Заказ №{details?.Number}")"
+       @bind-Visible="detailsVisible"
+       OnCancel="CloseDetails"
+       Footer="@null"
+       Width="640">
+    @if (details is not null)
+    {
+        <p>
+            <Tag Color="@StatusColor(details.Status)">@StatusText(details.Status)</Tag>
+            <span class="muted">создан @details.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+        </p>
+        @if (!string.IsNullOrWhiteSpace(details.Comment))
+        {
+            <p>Комментарий: @details.Comment</p>
+        }
+        <Table TItem="OrderItem" DataSource="@details.Items" HidePagination Size="@TableSize.Small">
+            <Column TData="string" Title="Напиток">
+                <div>@context.DrinkName</div>
+                @if (context.Toppings.Count > 0)
+                {
+                    <div class="muted">+ @string.Join(", ", context.Toppings.Select(t => t.Name))</div>
+                }
+            </Column>
+            <PropertyColumn Property="i => i.Quantity" Title="Кол-во" />
+            <Column TData="string" Title="Цена за шт.">@Money.Format(context.UnitPriceCents + context.Toppings.Sum(t => t.PriceCents))</Column>
+            <Column TData="string" Title="Сумма">@Money.Format(context.Quantity * (context.UnitPriceCents + context.Toppings.Sum(t => t.PriceCents)))</Column>
+        </Table>
+        <p style="margin-top: 12px; text-align: right;">Итого: <strong>@Money.Format(details.TotalPriceCents)</strong></p>
+    }
+    else
+    {
+        <Spin />
+    }
+</Modal>
+
+@code {
+    private List<OrderSummary> orders = [];
+    private int total;
+    private int pageIndex = 1;
+    private int pageSize = 10;
+    private bool loading;
+    private string statusFilter = "";
+
+    private Order? details;
+    private bool detailsVisible;
+
+    private OrderStatus? Status => Enum.TryParse<OrderStatus>(statusFilter, out var s) ? s : null;
+
+    private static string StatusText(OrderStatus status) => status switch
+    {
+        OrderStatus.InProgress => "В работе",
+        OrderStatus.Completed => "Выполнен",
+        _ => "Отменён"
+    };
+
+    private static string StatusColor(OrderStatus status) => status switch
+    {
+        OrderStatus.InProgress => "blue",
+        OrderStatus.Completed => "green",
+        _ => "red"
+    };
+
+    private async Task Load()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.GetOrdersAsync(Status, pageIndex, pageSize);
+            orders = result.Items;
+            total = result.TotalCount;
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task OnTableChange(QueryModel<OrderSummary> query)
+    {
+        pageIndex = query.PageIndex;
+        pageSize = query.PageSize;
+        await Load();
+    }
+
+    private async Task ReloadFromFirstPage()
+    {
+        pageIndex = 1;
+        await Load();
+    }
+
+    private async Task ShowDetails(OrderSummary order)
+    {
+        details = null;
+        detailsVisible = true;
+        try
+        {
+            details = await Api.GetOrderAsync(order.Id);
+        }
+        catch (ApiException e)
+        {
+            detailsVisible = false;
+            Message.Error(e.Message);
+        }
+    }
+
+    private void CloseDetails() => detailsVisible = false;
+
+    private async Task Complete(OrderSummary order)
+    {
+        try
+        {
+            await Api.CompleteOrderAsync(order.Id);
+            Message.Success($"Заказ №{order.Number} выполнен, бюджет пополнен на {Money.Format(order.TotalPriceCents)}");
+            await Session.RefreshAsync();
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+
+        await Load();
+    }
+
+    private async Task Cancel(OrderSummary order)
+    {
+        try
+        {
+            await Api.CancelOrderAsync(order.Id);
+            Message.Success($"Заказ №{order.Number} отменён, ингредиенты возвращены на склад");
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+
+        await Load();
+    }
+}

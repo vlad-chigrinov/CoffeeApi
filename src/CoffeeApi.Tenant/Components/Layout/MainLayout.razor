@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject TenantSession Session
+
+<AntContainer />
+
+<AntDesign.Layout Style="min-height: 100vh;">
+    <Header Class="app-header">
+        <div class="brand">☕ @(Session.Me?.Name ?? "Coffee")</div>
+        <Menu Theme="MenuTheme.Dark" Mode="MenuMode.Horizontal" Class="app-menu">
+            <MenuItem RouterLink="/" RouterMatch="NavLinkMatch.All">Новый заказ</MenuItem>
+            <MenuItem RouterLink="/orders">Заказы</MenuItem>
+            <MenuItem RouterLink="/warehouse">Склад</MenuItem>
+        </Menu>
+        <div class="budget">
+            @if (Session.Me is { } me)
+            {
+                <span>Бюджет: <strong>@Money.Format(me.BudgetCents)</strong></span>
+            }
+        </div>
+    </Header>
+    <Content Class="app-content">
+        @if (Session.Error is { } error)
+        {
+            <Alert Type="@AlertType.Error" Message="Не удалось войти в API" Description="@error" ShowIcon="true" Class="section-gap" />
+        }
+        @Body
+    </Content>
+</AntDesign.Layout>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Произошла непредвиденная ошибка.
+    <a href="." class="reload">Перезагрузить</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += OnSessionChanged;
+        await Session.RefreshAsync();
+    }
+
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+}

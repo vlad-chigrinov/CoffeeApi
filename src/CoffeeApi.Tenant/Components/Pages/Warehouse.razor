@@ -1,0 +1,199 @@
+@page "/warehouse"
+@inject CoffeeApiClient Api
+@inject TenantSession Session
+@inject IMessageService Message
+
+<PageTitle>Склад</PageTitle>
+
+<h1 class="page-title">Склад</h1>
+
+<Row Gutter="16">
+    <Col Xs="24" Lg="12">
+        <Card Title="Остатки на складе" Class="section-gap">
+            <Table TItem="StockItem" DataSource="@stock" Loading="@loadingStock" HidePagination Size="@TableSize.Small">
+                <PropertyColumn Property="s => s.ProductName" Title="Продукт" />
+                <Column TData="string" Title="Остаток">@context.Quantity @context.Unit</Column>
+            </Table>
+            @if (!loadingStock && stock.Count == 0)
+            {
+                <div class="muted" style="margin-top: 12px;">Склад пуст — купите продукты, чтобы принимать заказы.</div>
+            }
+        </Card>
+    </Col>
+
+    <Col Xs="24" Lg="12">
+        <Card Title="Купить продукты" Class="section-gap">
+            <Table TItem="Product" DataSource="@products" Loading="@loadingProducts" HidePagination Size="@TableSize.Small">
+                <PropertyColumn Property="p => p.Name" Title="Продукт" />
+                <Column TData="string" Title="Упаковка">@context.PackSize @context.Unit</Column>
+                <Column TData="string" Title="Цена">@Money.Format(context.PackPriceCents)</Column>
+                <ActionColumn Title="">
+                    <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" OnClick="() => OpenBuy(context)">Купить</Button>
+                </ActionColumn>
+            </Table>
+        </Card>
+    </Col>
+</Row>
+
+<Card Title="История покупок" Class="section-gap">
+    <Table TItem="Purchase"
+           DataSource="@purchases"
+           Total="@purchasesTotal"
+           PageIndex="@purchasesPage"
+           PageSize="@purchasesPageSize"
+           Loading="@loadingPurchases"
+           OnChange="OnPurchasesChange"
+           ScrollX="600">
+        <Column TData="string" Title="Дата">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</Column>
+        <PropertyColumn Property="p => p.ProductName" Title="Продукт" />
+        <PropertyColumn Property="p => p.Packs" Title="Упаковок" />
+        <Column TData="string" Title="Добавлено">@context.QuantityAdded</Column>
+        <Column TData="string" Title="Потрачено">@Money.Format(context.TotalPriceCents)</Column>
+    </Table>
+</Card>
+
+<Modal Title="@($"Купить: {buying?.Name}")"
+       @bind-Visible="buyVisible"
+       OnOk="Buy"
+       OnCancel="CloseBuy"
+       OkText="@("Купить")"
+       CancelText="@("Отмена")"
+       ConfirmLoading="@buyingNow"
+       OkButtonProps="@(new ButtonProps { Disabled = !CanAfford })">
+    @if (buying is not null)
+    {
+        <p>Упаковка: @buying.PackSize @buying.Unit по @Money.Format(buying.PackPriceCents)</p>
+        <div class="section-gap">
+            <span>Упаковок: </span>
+            <AntDesign.InputNumber TValue="int" @bind-Value="packs" Min="1" Max="10000" />
+        </div>
+        <p>Будет добавлено: <strong>@(packs * buying.PackSize) @buying.Unit</strong></p>
+        <p>
+            К оплате: <strong>@Money.Format(Cost)</strong>
+            <span class="muted">(в бюджете @Money.Format(Session.Me?.BudgetCents ?? 0))</span>
+        </p>
+        @if (!CanAfford)
+        {
+            <Alert Type="@AlertType.Warning" Message="Не хватает бюджета для этой покупки" ShowIcon="true" />
+        }
+    }
+</Modal>
+
+@code {
+    private List<StockItem> stock = [];
+    private List<Product> products = [];
+    private List<Purchase> purchases = [];
+    private bool loadingStock;
+    private bool loadingProducts;
+    private bool loadingPurchases;
+
+    private int purchasesTotal;
+    private int purchasesPage = 1;
+    private int purchasesPageSize = 5;
+
+    private Product? buying;
+    private bool buyVisible;
+    private bool buyingNow;
+    private int packs = 1;
+
+    private long Cost => buying is null ? 0 : packs * buying.PackPriceCents;
+    private bool CanAfford => Session.Me is { } me && Cost <= me.BudgetCents;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadStock(), LoadProducts());
+    }
+
+    private async Task LoadStock()
+    {
+        loadingStock = true;
+        try
+        {
+            stock = await Api.GetStockAsync();
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loadingStock = false;
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        loadingProducts = true;
+        try
+        {
+            products = await Api.GetProductsAsync();
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loadingProducts = false;
+        }
+    }
+
+    private async Task LoadPurchases()
+    {
+        loadingPurchases = true;
+        try
+        {
+            var result = await Api.GetPurchasesAsync(purchasesPage, purchasesPageSize);
+            purchases = result.Items;
+            purchasesTotal = result.TotalCount;
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loadingPurchases = false;
+        }
+    }
+
+    private async Task OnPurchasesChange(QueryModel<Purchase> query)
+    {
+        purchasesPage = query.PageIndex;
+        purchasesPageSize = query.PageSize;
+        await LoadPurchases();
+    }
+
+    private void OpenBuy(Product product)
+    {
+        buying = product;
+        packs = 1;
+        buyVisible = true;
+    }
+
+    private void CloseBuy() => buyVisible = false;
+
+    private async Task Buy()
+    {
+        if (buying is null) return;
+
+        buyingNow = true;
+        try
+        {
+            var result = await Api.PurchaseAsync(buying.Id, packs);
+            Message.Success($"Куплено: {buying.Name} × {packs} уп. за {Money.Format(result.Purchase.TotalPriceCents)}");
+            buyVisible = false;
+
+            purchasesPage = 1;
+            await Task.WhenAll(LoadStock(), LoadPurchases(), Session.RefreshAsync());
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            buyingNow = false;
+        }
+    }
+}

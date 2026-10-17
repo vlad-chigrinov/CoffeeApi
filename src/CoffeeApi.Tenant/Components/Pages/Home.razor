@@ -1,0 +1,270 @@
+﻿@page "/"
+@inject CoffeeApiClient Api
+@inject IMessageService Message
+@inject CartState Cart
+
+<PageTitle>Новый заказ</PageTitle>
+
+<h1 class="page-title">Новый заказ</h1>
+
+<Row Gutter="16">
+    <Col Xs="24" Lg="14">
+        <Card Title="Меню" Class="section-gap">
+            <Extra>
+                <Select TItem="Category"
+                        TItemValue="Guid?"
+                        DataSource="@categories"
+                        Value="@categoryId"
+                        ValueChanged="OnCategoryChanged"
+                        LabelName="@nameof(Category.Name)"
+                        ValueName="@nameof(Category.Id)"
+                        Placeholder="Все категории"
+                        AllowClear
+                        Style="min-width: 200px;" />
+            </Extra>
+            <Body>
+                <Table TItem="DrinkListItem"
+                       DataSource="@drinks"
+                       Total="@total"
+                       PageIndex="@pageIndex"
+                       PageSize="@pageSize"
+                       Loading="@loading"
+                       OnChange="OnTableChange"
+                       ScrollX="400">
+                    <PropertyColumn Property="d => d.Name" Title="Напиток" />
+                    <PropertyColumn Property="d => d.CategoryName" Title="Категория" />
+                    <Column TData="string" Title="Цена">@Money.Format(context.PriceCents)</Column>
+                    <ActionColumn Title="">
+                        <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" OnClick="() => OpenAdd(context)">В заказ</Button>
+                    </ActionColumn>
+                </Table>
+            </Body>
+        </Card>
+    </Col>
+
+    <Col Xs="24" Lg="10">
+        <Card Title="Корзина" Class="section-gap">
+            @if (Cart.Lines.Count == 0)
+            {
+                <Empty Description="@("Добавьте напитки из меню")" />
+            }
+            else
+            {
+                <Table TItem="CartLine" DataSource="@Cart.Lines" HidePagination Size="@TableSize.Small">
+                    <Column TData="string" Title="Напиток">
+                        <div>@context.DrinkName × @context.Quantity</div>
+                        @if (context.Toppings.Count > 0)
+                        {
+                            <div class="muted">+ @string.Join(", ", context.Toppings.Select(t => t.Name))</div>
+                        }
+                    </Column>
+                    <Column TData="string" Title="Сумма">@Money.Format(context.Total)</Column>
+                    <ActionColumn Title="">
+                        <Button Type="@ButtonType.Text" Danger Icon="delete" OnClick="() => Remove(context)" />
+                    </ActionColumn>
+                </Table>
+
+                <div class="section-gap"></div>
+                <TextArea @bind-Value="Cart.Comment" Placeholder="Комментарий к заказу" MaxLength="500" Rows="2" />
+                <div class="section-gap"></div>
+
+                @if (orderError is not null)
+                {
+                    <Alert Type="@AlertType.Error" Message="@orderError" Description="@shortageText" ShowIcon="true" Class="section-gap" />
+                }
+
+                <Button Type="@ButtonType.Primary" Block Loading="@placing" OnClick="PlaceOrder">
+                    Оформить заказ — @Money.Format(Cart.Total)
+                </Button>
+            }
+        </Card>
+    </Col>
+</Row>
+
+<Modal Title="@(selected?.Name)"
+       @bind-Visible="addVisible"
+       OnOk="AddToCart"
+       OnCancel="CloseAdd"
+       OkText="@("Добавить в корзину")"
+       CancelText="@("Отмена")"
+       ConfirmLoading="@loadingDetails">
+    @if (details is not null)
+    {
+        @if (!string.IsNullOrWhiteSpace(details.Description))
+        {
+            <p class="muted">@details.Description</p>
+        }
+        <p>Цена: <strong>@Money.Format(details.PriceCents)</strong></p>
+
+        <div class="section-gap">
+            <span>Количество: </span>
+            <AntDesign.InputNumber TValue="int" @bind-Value="quantity" Min="1" Max="100" />
+        </div>
+
+        @if (toppings.Count > 0)
+        {
+            <div>Топпинги:</div>
+            @foreach (var topping in toppings)
+            {
+                <div>
+                    <Checkbox Checked="@chosen.Contains(topping.Id)"
+                              CheckedChanged="@((bool on) => ToggleTopping(topping.Id, on))">
+                        @topping.Name (+@Money.Format(topping.PriceCents))
+                    </Checkbox>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="muted">Для этого напитка нет доступных топпингов</div>
+        }
+
+        <p style="margin-top: 16px;">Итого: <strong>@Money.Format(LineTotal)</strong></p>
+    }
+    else
+    {
+        <Spin />
+    }
+</Modal>
+
+@code {
+    private List<Category> categories = [];
+    private Guid? categoryId;
+
+    private List<DrinkListItem> drinks = [];
+    private int total;
+    private int pageIndex = 1;
+    private int pageSize = 8;
+    private bool loading;
+
+    private bool placing;
+    private string? orderError;
+    private string? shortageText;
+
+    private DrinkListItem? selected;
+    private DrinkDetails? details;
+    private List<Topping> toppings = [];
+    private readonly HashSet<Guid> chosen = [];
+    private int quantity = 1;
+    private bool addVisible;
+    private bool loadingDetails;
+
+    private long LineTotal =>
+        details is null ? 0 : quantity * (details.PriceCents + toppings.Where(t => chosen.Contains(t.Id)).Sum(t => t.PriceCents));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await Api.GetCategoriesAsync();
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+    }
+
+    private async Task LoadDrinks()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.GetDrinksAsync(categoryId, pageIndex, pageSize);
+            drinks = result.Items;
+            total = result.TotalCount;
+        }
+        catch (ApiException e)
+        {
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task OnTableChange(QueryModel<DrinkListItem> query)
+    {
+        pageIndex = query.PageIndex;
+        pageSize = query.PageSize;
+        await LoadDrinks();
+    }
+
+    private async Task OnCategoryChanged(Guid? value)
+    {
+        categoryId = value;
+        pageIndex = 1;
+        await LoadDrinks();
+    }
+
+    private async Task OpenAdd(DrinkListItem drink)
+    {
+        selected = drink;
+        details = null;
+        toppings = [];
+        chosen.Clear();
+        quantity = 1;
+        addVisible = true;
+        loadingDetails = true;
+        try
+        {
+            details = await Api.GetDrinkAsync(drink.Id);
+            toppings = await Api.GetDrinkToppingsAsync(drink.Id);
+        }
+        catch (ApiException e)
+        {
+            addVisible = false;
+            Message.Error(e.Message);
+        }
+        finally
+        {
+            loadingDetails = false;
+        }
+    }
+
+    private void CloseAdd() => addVisible = false;
+
+    private void ToggleTopping(Guid id, bool on)
+    {
+        if (on) chosen.Add(id);
+        else chosen.Remove(id);
+    }
+
+    private void AddToCart()
+    {
+        if (details is null) return;
+
+        var picked = toppings.Where(t => chosen.Contains(t.Id)).ToList();
+        Cart.Add(new CartLine(details.Id, details.Name, details.PriceCents, quantity, picked));
+        addVisible = false;
+        orderError = null;
+    }
+
+    private void Remove(CartLine line) => Cart.Remove(line);
+
+    private async Task PlaceOrder()
+    {
+        placing = true;
+        orderError = null;
+        shortageText = null;
+        try
+        {
+            var items = Cart.Lines.Select(l => new NewOrderItem(l.DrinkId, l.Quantity, l.Toppings.Select(t => t.Id).ToList())).ToList();
+            var order = await Api.CreateOrderAsync(new NewOrder(items, string.IsNullOrWhiteSpace(Cart.Comment) ? null : Cart.Comment));
+
+            Cart.Clear();
+            Message.Success($"Заказ №{order.Number} оформлен на сумму {Money.Format(order.TotalPriceCents)}");
+        }
+        catch (ApiException e)
+        {
+            orderError = e.Message;
+            shortageText = e.Shortages.Count == 0
+                ? null
+                : string.Join("; ", e.Shortages.Select(s => $"{s.ProductName}: нужно {s.Required} {s.Unit}, на складе {s.Available} {s.Unit}"));
+        }
+        finally
+        {
+            placing = false;
+        }
+    }
+}

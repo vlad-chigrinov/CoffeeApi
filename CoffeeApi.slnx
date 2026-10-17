@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CoffeeApi.Api/CoffeeApi.Api.csproj" />
+    <Project Path="src/CoffeeApi.Tenant/CoffeeApi.Tenant.csproj" />
+  </Folder>
+</Solution>
