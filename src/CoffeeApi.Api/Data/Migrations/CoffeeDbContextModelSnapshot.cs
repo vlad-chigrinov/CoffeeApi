@@ -123,6 +123,11 @@ namespace CoffeeApi.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Number")
                         .HasColumnType("INTEGER");
 

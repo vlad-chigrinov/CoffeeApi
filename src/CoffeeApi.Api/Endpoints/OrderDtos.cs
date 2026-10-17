@@ -11,6 +11,7 @@ public record OrderItemRequest(
 
 public record CreateOrderRequest(
     [property: Required, MinLength(1), MaxLength(50)] List<OrderItemRequest> Items,
+    [property: Required, StringLength(Order.CustomerNameMaxLength, MinimumLength = Order.CustomerNameMinLength)] string CustomerName,
     [property: StringLength(500)] string? Comment = null);
 
 public record OrderSummary(
@@ -18,6 +19,7 @@ public record OrderSummary(
     int Number,
     OrderStatus Status,
     long TotalPriceCents,
+    string CustomerName,
     string? Comment,
     int ItemCount,
     DateTime CreatedAt,
@@ -25,16 +27,17 @@ public record OrderSummary(
 {
     public static readonly Expression<Func<Order, OrderSummary>> Projection =
         o => new OrderSummary(
-            o.Id, o.Number, o.Status, o.TotalPriceCents, o.Comment,
+            o.Id, o.Number, o.Status, o.TotalPriceCents, o.CustomerName, o.Comment,
             o.Items.Sum(i => i.Quantity), o.CreatedAt, o.UpdatedAt);
 }
 
-public record OrderItemToppingResponse(Guid ToppingId, string Name, long PriceCents);
+public record OrderItemToppingResponse(Guid ToppingId, string Name, string? ImageUrl, long PriceCents);
 
 public record OrderItemResponse(
     Guid Id,
     Guid DrinkId,
     string DrinkName,
+    string? DrinkImageUrl,
     int Quantity,
     long UnitPriceCents,
     List<OrderItemToppingResponse> Toppings);
@@ -44,6 +47,7 @@ public record OrderResponse(
     int Number,
     OrderStatus Status,
     long TotalPriceCents,
+    string CustomerName,
     string? Comment,
     DateTime CreatedAt,
     DateTime UpdatedAt,
@@ -51,14 +55,14 @@ public record OrderResponse(
 {
     public static readonly Expression<Func<Order, OrderResponse>> Projection =
         o => new OrderResponse(
-            o.Id, o.Number, o.Status, o.TotalPriceCents, o.Comment, o.CreatedAt, o.UpdatedAt,
+            o.Id, o.Number, o.Status, o.TotalPriceCents, o.CustomerName, o.Comment, o.CreatedAt, o.UpdatedAt,
             o.Items
                 .OrderBy(i => i.Drink.Name)
                 .Select(i => new OrderItemResponse(
-                    i.Id, i.DrinkId, i.Drink.Name, i.Quantity, i.UnitPriceCents,
+                    i.Id, i.DrinkId, i.Drink.Name, i.Drink.ImageUrl, i.Quantity, i.UnitPriceCents,
                     i.Toppings
                         .OrderBy(t => t.Topping.Name)
-                        .Select(t => new OrderItemToppingResponse(t.ToppingId, t.Topping.Name, t.PriceCents))
+                        .Select(t => new OrderItemToppingResponse(t.ToppingId, t.Topping.Name, t.Topping.ImageUrl, t.PriceCents))
                         .ToList()))
                 .ToList());
 }

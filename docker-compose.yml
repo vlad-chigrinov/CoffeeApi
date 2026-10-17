@@ -8,6 +8,12 @@ services:
     restart: unless-stopped
     environment:
       Admin__ApiKey: ${ADMIN_API_KEY:?set ADMIN_API_KEY in .env}
+      # Demo catalog (drinks, toppings, ingredients) put into the database on the first start, while it is empty.
+      Seed__Enabled: ${SEED_DEMO_DATA:-true}
+      # Demo tenant created by the seed (with a warehouse and orders). It is the same name and key the tenant
+      # container below logs in with. Left empty, only the shared catalog is seeded.
+      Seed__Tenant__Name: ${TENANT_NAME:-}
+      Seed__Tenant__ApiKey: ${TENANT_KEY:-}
       # Trust X-Forwarded-* from Traefik, so the app sees the original https scheme and host.
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     volumes:
@@ -25,6 +31,9 @@ services:
     image: ghcr.io/vlad-chigrinov/coffee-admin:latest
     restart: unless-stopped
     depends_on: [api]
+    environment:
+      # PrimeUI license key; the container writes it into /config.js on start, so it is not baked into the image.
+      PRIMEUI_LICENSE: ${PRIMEUI_LICENSE:-}
     networks: [default, traefik]
     labels:
       traefik.enable: "true"

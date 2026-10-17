@@ -27,21 +27,21 @@ public record Ingredient(Guid ProductId, int Quantity);
 public record Topping(Guid Id, string Name, string? ImageUrl, long PriceCents, bool IsAvailable, List<Ingredient> Ingredients);
 
 public record OrderSummary(
-    Guid Id, int Number, OrderStatus Status, long TotalPriceCents, string? Comment,
+    Guid Id, int Number, OrderStatus Status, long TotalPriceCents, string CustomerName, string? Comment,
     int ItemCount, DateTime CreatedAt, DateTime UpdatedAt);
 
-public record OrderItemTopping(Guid ToppingId, string Name, long PriceCents);
+public record OrderItemTopping(Guid ToppingId, string Name, string? ImageUrl, long PriceCents);
 
 public record OrderItem(
-    Guid Id, Guid DrinkId, string DrinkName, int Quantity, long UnitPriceCents, List<OrderItemTopping> Toppings);
+    Guid Id, Guid DrinkId, string DrinkName, string? DrinkImageUrl, int Quantity, long UnitPriceCents, List<OrderItemTopping> Toppings);
 
 public record Order(
-    Guid Id, int Number, OrderStatus Status, long TotalPriceCents, string? Comment,
+    Guid Id, int Number, OrderStatus Status, long TotalPriceCents, string CustomerName, string? Comment,
     DateTime CreatedAt, DateTime UpdatedAt, List<OrderItem> Items);
 
 public record NewOrderItem(Guid DrinkId, int Quantity, List<Guid> ToppingIds);
 
-public record NewOrder(List<NewOrderItem> Items, string? Comment);
+public record NewOrder(List<NewOrderItem> Items, string CustomerName, string? Comment);
 
 public record Product(Guid Id, string Name, string Unit, int PackSize, long PackPriceCents);
 

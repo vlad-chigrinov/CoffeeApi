@@ -12,6 +12,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         // Concurrency token: two simultaneous status changes cannot both succeed (e.g. completing an order twice).
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20).IsConcurrencyToken();
+        builder.Property(o => o.CustomerName).IsRequired().HasMaxLength(Order.CustomerNameMaxLength);
         builder.Property(o => o.Comment).HasMaxLength(500);
 
         builder.HasOne(o => o.Tenant)

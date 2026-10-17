@@ -52,6 +52,211 @@ body {
     color: rgba(0, 0, 0, 0.45);
 }
 
+/* Pictures: drinks and toppings */
+.thumb {
+    display: block;
+    flex: none;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #f0ebe6;
+}
+
+.thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6em;
+    color: #b8a898;
+}
+
+.drink-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+}
+
+.drink-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #f0f0f0;
+    border-radius: 12px;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.drink-card:hover,
+.drink-card:focus-visible {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+    outline: none;
+}
+
+.drink-card .drink-card-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    border-radius: 0;
+    font-size: 3em;
+}
+
+.drink-card-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px 12px;
+}
+
+.drink-card-name {
+    font-weight: 600;
+}
+
+.drink-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 8px;
+}
+
+.drink-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.orders-table .ant-table-cell {
+    padding: 10px 8px;
+}
+
+.orders-table .ant-table-tbody > tr {
+    cursor: pointer;
+}
+
+.order-customer {
+    max-width: 110px;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.input-invalid,
+.input-invalid:hover {
+    border-color: #ff4d4f;
+}
+
+.field-error {
+    margin-top: 4px;
+    color: #ff4d4f;
+    font-size: 12px;
+}
+
+.order-comment {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.order-sum {
+    font-weight: 600;
+}
+
+.row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.line-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.line-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.line-item:last-child {
+    border-bottom: none;
+}
+
+.line-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.line-name {
+    font-weight: 600;
+}
+
+.line-total {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.topping-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 2px 0;
+}
+
+.topping-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px 1px 2px;
+    font-size: 12px;
+    background: #faf6f2;
+    border: 1px solid #efe6dd;
+    border-radius: 12px;
+}
+
+.topping-chip .topping-chip-image {
+    border-radius: 50%;
+    font-size: 10px;
+}
+
+.modal-image {
+    width: 100%;
+    max-height: 260px;
+    aspect-ratio: 16 / 10;
+    margin-bottom: 12px;
+}
+
+.topping-option {
+    margin: 10px 0;
+}
+
+.topping-option .ant-checkbox-wrapper {
+    display: inline-flex;
+    align-items: center;
+}
+
+.topping-option .ant-checkbox {
+    top: 0;
+}
+
+.topping-option .ant-checkbox-wrapper > span:last-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.topping-option .topping-option-image {
+    border-radius: 10px;
+    font-size: 28px;
+}
+
 .blazor-error-boundary {
     background: #b32121;
     padding: 1rem;

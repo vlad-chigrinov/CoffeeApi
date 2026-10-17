@@ -23,21 +23,44 @@
                         Style="min-width: 200px;" />
             </Extra>
             <Body>
-                <Table TItem="DrinkListItem"
-                       DataSource="@drinks"
-                       Total="@total"
-                       PageIndex="@pageIndex"
-                       PageSize="@pageSize"
-                       Loading="@loading"
-                       OnChange="OnTableChange"
-                       ScrollX="400">
-                    <PropertyColumn Property="d => d.Name" Title="Напиток" />
-                    <PropertyColumn Property="d => d.CategoryName" Title="Категория" />
-                    <Column TData="string" Title="Цена">@Money.Format(context.PriceCents)</Column>
-                    <ActionColumn Title="">
-                        <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" OnClick="() => OpenAdd(context)">В заказ</Button>
-                    </ActionColumn>
-                </Table>
+                <Spin Spinning="@loading">
+                    @if (drinks.Count == 0 && !loading)
+                    {
+                        <Empty Description="@("В меню пока ничего нет")" />
+                    }
+                    else
+                    {
+                        <div class="drink-grid">
+                            @foreach (var drink in drinks)
+                            {
+                                <div class="drink-card" role="button" tabindex="0"
+                                     @onclick="() => OpenAdd(drink)"
+                                     @onkeydown="@(e => OnCardKey(e, drink))">
+                                    <Thumb ImageUrl="@drink.ImageUrl" Alt="@drink.Name" Class="drink-card-image" />
+                                    <div class="drink-card-body">
+                                        <div class="drink-card-name">@drink.Name</div>
+                                        @if (!string.IsNullOrEmpty(drink.CategoryName))
+                                        {
+                                            <div class="muted">@drink.CategoryName</div>
+                                        }
+                                        <div class="drink-card-footer">
+                                            <strong>@Money.Format(drink.PriceCents)</strong>
+                                            <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" Shape="@ButtonShape.Round" Icon="plus"
+                                                    OnClick="() => OpenAdd(drink)" OnClickStopPropagation>В заказ</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="drink-pagination">
+                            <Pagination Total="@total"
+                                        Current="@pageIndex"
+                                        PageSize="@pageSize"
+                                        HideOnSinglePage
+                                        OnChange="OnPageChange" />
+                        </div>
+                    }
+                </Spin>
             </Body>
         </Card>
     </Col>
@@ -50,20 +73,42 @@
             }
             else
             {
-                <Table TItem="CartLine" DataSource="@Cart.Lines" HidePagination Size="@TableSize.Small">
-                    <Column TData="string" Title="Напиток">
-                        <div>@context.DrinkName × @context.Quantity</div>
-                        @if (context.Toppings.Count > 0)
-                        {
-                            <div class="muted">+ @string.Join(", ", context.Toppings.Select(t => t.Name))</div>
-                        }
-                    </Column>
-                    <Column TData="string" Title="Сумма">@Money.Format(context.Total)</Column>
-                    <ActionColumn Title="">
-                        <Button Type="@ButtonType.Text" Danger Icon="delete" OnClick="() => Remove(context)" />
-                    </ActionColumn>
-                </Table>
+                <div class="line-list">
+                    @foreach (var line in Cart.Lines)
+                    {
+                        <div class="line-item">
+                            <Thumb ImageUrl="@line.ImageUrl" Alt="@line.DrinkName" Size="64" />
+                            <div class="line-info">
+                                <div class="line-name">@line.DrinkName × @line.Quantity</div>
+                                @if (line.Toppings.Count > 0)
+                                {
+                                    <div class="topping-chips">
+                                        @foreach (var topping in line.Toppings)
+                                        {
+                                            <span class="topping-chip">
+                                                <Thumb ImageUrl="@topping.ImageUrl" Alt="@topping.Name" Size="18" Class="topping-chip-image" />
+                                                @topping.Name
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="line-total">@Money.Format(line.Total)</div>
+                            <Button Type="@ButtonType.Text" Danger Icon="delete" OnClick="() => Remove(line)" />
+                        </div>
+                    }
+                </div>
 
+                <div class="section-gap"></div>
+                <Input @bind-Value="Cart.CustomerName"
+                       OnInput="@(e => Cart.CustomerName = e.Value?.ToString())"
+                       Placeholder="Имя клиента (2–10 символов)"
+                       MaxLength="@CartState.CustomerNameMaxLength"
+                       Class="@(showNameError && !Cart.HasValidCustomerName ? "input-invalid" : null)" />
+                @if (showNameError && !Cart.HasValidCustomerName)
+                {
+                    <div class="field-error">Укажите имя клиента: от @CartState.CustomerNameMinLength до @CartState.CustomerNameMaxLength символов</div>
+                }
                 <div class="section-gap"></div>
                 <TextArea @bind-Value="Cart.Comment" Placeholder="Комментарий к заказу" MaxLength="500" Rows="2" />
                 <div class="section-gap"></div>
@@ -90,6 +135,7 @@
        ConfirmLoading="@loadingDetails">
     @if (details is not null)
     {
+        <Thumb ImageUrl="@details.ImageUrl" Alt="@details.Name" Class="modal-image" />
         @if (!string.IsNullOrWhiteSpace(details.Description))
         {
             <p class="muted">@details.Description</p>
@@ -106,9 +152,10 @@
             <div>Топпинги:</div>
             @foreach (var topping in toppings)
             {
-                <div>
+                <div class="topping-option">
                     <Checkbox Checked="@chosen.Contains(topping.Id)"
                               CheckedChanged="@((bool on) => ToggleTopping(topping.Id, on))">
+                        <Thumb ImageUrl="@topping.ImageUrl" Alt="@topping.Name" Size="64" Class="topping-option-image" />
                         @topping.Name (+@Money.Format(topping.PriceCents))
                     </Checkbox>
                 </div>
@@ -134,12 +181,13 @@
     private List<DrinkListItem> drinks = [];
     private int total;
     private int pageIndex = 1;
-    private int pageSize = 8;
+    private int pageSize = 9;
     private bool loading;
 
     private bool placing;
     private string? orderError;
     private string? shortageText;
+    private bool showNameError;
 
     private DrinkListItem? selected;
     private DrinkDetails? details;
@@ -162,6 +210,8 @@
         {
             Message.Error(e.Message);
         }
+
+        await LoadDrinks();
     }
 
     private async Task LoadDrinks()
@@ -183,11 +233,16 @@
         }
     }
 
-    private async Task OnTableChange(QueryModel<DrinkListItem> query)
+    private async Task OnPageChange(PaginationEventArgs args)
     {
-        pageIndex = query.PageIndex;
-        pageSize = query.PageSize;
+        pageIndex = args.Page;
+        pageSize = args.PageSize;
         await LoadDrinks();
+    }
+
+    private async Task OnCardKey(KeyboardEventArgs e, DrinkListItem drink)
+    {
+        if (e.Key is "Enter" or " ") await OpenAdd(drink);
     }
 
     private async Task OnCategoryChanged(Guid? value)
@@ -235,7 +290,7 @@
         if (details is null) return;
 
         var picked = toppings.Where(t => chosen.Contains(t.Id)).ToList();
-        Cart.Add(new CartLine(details.Id, details.Name, details.PriceCents, quantity, picked));
+        Cart.Add(new CartLine(details.Id, details.Name, details.ImageUrl, details.PriceCents, quantity, picked));
         addVisible = false;
         orderError = null;
     }
@@ -244,15 +299,22 @@
 
     private async Task PlaceOrder()
     {
+        if (!Cart.HasValidCustomerName)
+        {
+            showNameError = true;
+            return;
+        }
+
         placing = true;
         orderError = null;
         shortageText = null;
         try
         {
             var items = Cart.Lines.Select(l => new NewOrderItem(l.DrinkId, l.Quantity, l.Toppings.Select(t => t.Id).ToList())).ToList();
-            var order = await Api.CreateOrderAsync(new NewOrder(items, string.IsNullOrWhiteSpace(Cart.Comment) ? null : Cart.Comment));
+            var order = await Api.CreateOrderAsync(new NewOrder(items, Cart.CustomerName!.Trim(), string.IsNullOrWhiteSpace(Cart.Comment) ? null : Cart.Comment));
 
             Cart.Clear();
+            showNameError = false;
             Message.Success($"Заказ №{order.Number} оформлен на сумму {Money.Format(order.TotalPriceCents)}");
         }
         catch (ApiException e)

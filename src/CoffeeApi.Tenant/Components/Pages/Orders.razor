@@ -28,31 +28,46 @@
                PageSize="@pageSize"
                Loading="@loading"
                OnChange="OnTableChange"
-               ScrollX="700">
-            <PropertyColumn Property="o => o.Number" Title="№" />
-            <Column TData="string" Title="Статус">
-                <Tag Color="@StatusColor(context.Status)">@StatusText(context.Status)</Tag>
+               OnRowClick="OnRowClick"
+               Class="orders-table">
+            <PropertyColumn Property="o => o.Number" Title="№" Width="56" />
+            <Column TData="string" Title="Статус" Width="104">
+                <Tag Color="@StatusColor(context.Status)" Style="margin: 0;">@StatusText(context.Status)</Tag>
             </Column>
-            <PropertyColumn Property="o => o.ItemCount" Title="Напитков" />
-            <Column TData="string" Title="Сумма">@Money.Format(context.TotalPriceCents)</Column>
-            <Column TData="string" Title="Создан">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</Column>
+            <Column TData="string" Title="Клиент" Width="110">
+                <div class="order-customer" title="@context.CustomerName">@context.CustomerName</div>
+            </Column>
+            <Column TData="string" Title="Комментарий">
+                @if (string.IsNullOrWhiteSpace(context.Comment))
+                {
+                    <span class="muted">—</span>
+                }
+                else
+                {
+                    <div class="order-comment" title="@context.Comment">@context.Comment</div>
+                }
+            </Column>
+            <Column TData="string" Title="Сумма" Width="110">
+                <div class="order-sum">@Money.Format(context.TotalPriceCents)</div>
+                <div class="muted">напитков: @context.ItemCount</div>
+            </Column>
+            <Column TData="string" Title="Создан" Width="96">
+                <div>@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                <div class="muted">@context.CreatedAt.ToLocalTime().ToString("HH:mm")</div>
+            </Column>
             <ActionColumn Title="">
-                <Space>
-                    <SpaceItem><Button Size="@ButtonSize.Small" OnClick="() => ShowDetails(context)">Подробнее</Button></SpaceItem>
+                @* The row opens the details on click; its buttons must not. *@
+                <div class="row-actions" @onclick="() => { }" @onclick:stopPropagation>
                     @if (context.Status == OrderStatus.InProgress)
                     {
-                        <SpaceItem>
-                            <Popconfirm Title="Отметить заказ выполненным?" OkText="Да" CancelText="Нет" OnConfirm="() => Complete(context)">
-                                <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small">Выполнить</Button>
-                            </Popconfirm>
-                        </SpaceItem>
-                        <SpaceItem>
-                            <Popconfirm Title="Отменить заказ? Ингредиенты вернутся на склад." OkText="Да" CancelText="Нет" OnConfirm="() => Cancel(context)">
-                                <Button Danger Size="@ButtonSize.Small">Отменить</Button>
-                            </Popconfirm>
-                        </SpaceItem>
+                        <Popconfirm Title="Отметить заказ выполненным?" OkText="Да" CancelText="Нет" OnConfirm="() => Complete(context)">
+                            <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small">Выполнить</Button>
+                        </Popconfirm>
+                        <Popconfirm Title="Отменить заказ? Ингредиенты вернутся на склад." OkText="Да" CancelText="Нет" OnConfirm="() => Cancel(context)">
+                            <Button Danger Size="@ButtonSize.Small">Отменить</Button>
+                        </Popconfirm>
                     }
-                </Space>
+                </div>
             </ActionColumn>
         </Table>
     </Body>
@@ -69,22 +84,37 @@
             <Tag Color="@StatusColor(details.Status)">@StatusText(details.Status)</Tag>
             <span class="muted">создан @details.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
         </p>
+        <p>Клиент: <strong>@details.CustomerName</strong></p>
         @if (!string.IsNullOrWhiteSpace(details.Comment))
         {
             <p>Комментарий: @details.Comment</p>
         }
-        <Table TItem="OrderItem" DataSource="@details.Items" HidePagination Size="@TableSize.Small">
-            <Column TData="string" Title="Напиток">
-                <div>@context.DrinkName</div>
-                @if (context.Toppings.Count > 0)
-                {
-                    <div class="muted">+ @string.Join(", ", context.Toppings.Select(t => t.Name))</div>
-                }
-            </Column>
-            <PropertyColumn Property="i => i.Quantity" Title="Кол-во" />
-            <Column TData="string" Title="Цена за шт.">@Money.Format(context.UnitPriceCents + context.Toppings.Sum(t => t.PriceCents))</Column>
-            <Column TData="string" Title="Сумма">@Money.Format(context.Quantity * (context.UnitPriceCents + context.Toppings.Sum(t => t.PriceCents)))</Column>
-        </Table>
+        <div class="line-list">
+            @foreach (var item in details.Items)
+            {
+                var unitPrice = item.UnitPriceCents + item.Toppings.Sum(t => t.PriceCents);
+                <div class="line-item">
+                    <Thumb ImageUrl="@item.DrinkImageUrl" Alt="@item.DrinkName" Size="72" />
+                    <div class="line-info">
+                        <div class="line-name">@item.DrinkName</div>
+                        @if (item.Toppings.Count > 0)
+                        {
+                            <div class="topping-chips">
+                                @foreach (var topping in item.Toppings)
+                                {
+                                    <span class="topping-chip">
+                                        <Thumb ImageUrl="@topping.ImageUrl" Alt="@topping.Name" Size="18" Class="topping-chip-image" />
+                                        @topping.Name
+                                    </span>
+                                }
+                            </div>
+                        }
+                        <div class="muted">@item.Quantity × @Money.Format(unitPrice)</div>
+                    </div>
+                    <div class="line-total">@Money.Format(item.Quantity * unitPrice)</div>
+                </div>
+            }
+        </div>
         <p style="margin-top: 12px; text-align: right;">Итого: <strong>@Money.Format(details.TotalPriceCents)</strong></p>
     }
     else
@@ -151,6 +181,8 @@
         pageIndex = 1;
         await Load();
     }
+
+    private async Task OnRowClick(RowData<OrderSummary> row) => await ShowDetails(row.Data);
 
     private async Task ShowDetails(OrderSummary order)
     {

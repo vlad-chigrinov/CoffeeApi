@@ -1,15 +1,16 @@
 using System.Text.Json.Serialization;
 using CoffeeApi.Api.Auth;
 using CoffeeApi.Api.Data;
+using CoffeeApi.Api.Data.Seeding;
 using CoffeeApi.Api.Endpoints;
+using CoffeeApi.Api.OpenApi;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddCoffeeOpenApi();
 builder.Services.AddValidation();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -34,19 +35,24 @@ builder.Services.AddDbContext<CoffeeDbContext>(options =>
         // Responses load several collections (items, toppings, ingredients): one query each, no cartesian products.
         sqlite => sqlite.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
+builder.Services.Configure<SeedOptions>(builder.Configuration.GetSection(SeedOptions.SectionName));
+builder.Services.AddScoped<DatabaseSeeder>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseCoffeeSwagger();
 }
 
 // SQLite is owned by this single process, so it is safe to bring the schema up to date on startup in every
-// environment (a fresh docker volume is created and migrated on the first run).
+// environment (a fresh docker volume is created and migrated on the first run), and to fill a database
+// that is still empty with demo data (see SeedOptions to switch that off).
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<CoffeeDbContext>().Database.Migrate();
+    await scope.ServiceProvider.GetRequiredService<CoffeeDbContext>().Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<DatabaseSeeder>().SeedAsync();
 }
 
 app.UseHttpsRedirection();

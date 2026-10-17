@@ -63,6 +63,17 @@ public static class OrderEndpoints
     {
         var tenantId = currentTenant.Id!.Value;
 
+        // The attributes check the raw value; a name made of spaces must not pass, so the trimmed one is checked too.
+        var customerName = request.CustomerName?.Trim() ?? "";
+        if (customerName.Length is < Order.CustomerNameMinLength or > Order.CustomerNameMaxLength)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.CustomerName)] =
+                    [$"Customer name must be {Order.CustomerNameMinLength}-{Order.CustomerNameMaxLength} characters long."]
+            });
+        }
+
         var drinkIds = request.Items.Select(i => i.DrinkId).Distinct().ToList();
         var drinks = await db.Drinks
             .AsNoTracking()
@@ -118,6 +129,7 @@ public static class OrderEndpoints
             TenantId = tenantId,
             Status = OrderStatus.InProgress,
             TotalPriceCents = items.Sum(i => i.Quantity * (i.UnitPriceCents + i.Toppings.Sum(t => t.PriceCents))),
+            CustomerName = customerName,
             Comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim(),
             CreatedAt = now,
             UpdatedAt = now,
