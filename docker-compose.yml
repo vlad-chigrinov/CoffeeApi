@@ -1,0 +1,61 @@
+# Runs behind an already running Traefik (external network ${TRAEFIK_NETWORK}) that terminates TLS.
+# Settings come from .env (see .env.example).
+
+services:
+  api:
+    build: ./src/CoffeeApi.Api
+    restart: unless-stopped
+    environment:
+      Admin__ApiKey: ${ADMIN_API_KEY:?set ADMIN_API_KEY in .env}
+      # Trust X-Forwarded-* from Traefik, so the app sees the original https scheme and host.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    volumes:
+      - coffee-data:/data
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.coffee-api.rule: Host(`coffee-api.vlados.tech`)
+      traefik.http.routers.coffee-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.coffee-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.coffee-api.loadbalancer.server.port: "8080"
+
+  admin:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [api]
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.coffee-admin.rule: Host(`coffee-admin.vlados.tech`)
+      traefik.http.routers.coffee-admin.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.coffee-admin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.coffee-admin.loadbalancer.server.port: "80"
+
+  tenant:
+    build: ./src/CoffeeApi.Tenant
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      # Talks to the API over the internal compose network; the tenant key never leaves the server.
+      CoffeeApi__BaseUrl: http://api:8080
+      CoffeeApi__TenantName: ${TENANT_NAME:-}
+      CoffeeApi__TenantKey: ${TENANT_KEY:-}
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.coffee-tenant.rule: Host(`coffee.vlados.tech`)
+      traefik.http.routers.coffee-tenant.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.coffee-tenant.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.coffee-tenant.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    name: ${TRAEFIK_NETWORK:-traefik}
+    external: true
+
+volumes:
+  coffee-data:

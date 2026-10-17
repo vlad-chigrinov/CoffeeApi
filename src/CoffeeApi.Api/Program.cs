@@ -40,8 +40,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
 
-    using var scope = app.Services.CreateScope();
+// SQLite is owned by this single process, so it is safe to bring the schema up to date on startup in every
+// environment (a fresh docker volume is created and migrated on the first run).
+using (var scope = app.Services.CreateScope())
+{
     scope.ServiceProvider.GetRequiredService<CoffeeDbContext>().Database.Migrate();
 }
 
