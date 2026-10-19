@@ -41,10 +41,7 @@ builder.Services.AddScoped<DatabaseSeeder>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseCoffeeSwagger();
-}
+app.UseCoffeeSwagger();
 
 // SQLite is owned by this single process, so it is safe to bring the schema up to date on startup in every
 // environment (a fresh docker volume is created and migrated on the first run), and to fill a database
